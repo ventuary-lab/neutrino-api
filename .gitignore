@@ -1,0 +1,6 @@
+/test/deployMain.js
+/test/deploy.js
+/test/deploy/*.development.js
+npm-debug.log
+surfboard.development.config.json
+node_modules
