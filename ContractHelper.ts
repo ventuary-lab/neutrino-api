@@ -1,10 +1,10 @@
 import { broadcast, data, seedUtils, massTransfer, waitForTx, issue, setScript} from "@waves/waves-transactions"
 import { DeployInfo } from "./models/NeutrinoContractAccounts";
 import { readFileSync } from 'fs'
-import { compile, ICompilationResult } from '@waves/ride-js'
+import { compile, ICompilationResult, ICompilationError } from '@waves/ride-js'
 
 export class ContractHelper{
-    static async deploy(distributorSeed, nodeUrl, chainId, dirScriptsPath, symbolNeutrino, symbolBond, descriptionNeutrino, descriptionBond, nodeAddress, nodeOracleProvider = nodeAddress, leasingInterval = 10080): Promise<DeployInfo>{
+    static async deploy(distributorSeed, nodeUrl, chainId, dirScriptsPath, symbolNeutrino, symbolBond, descriptionNeutrino, descriptionBond, nodeAddress, removeMultisig = false, nodeOracleProvider = nodeAddress): Promise<DeployInfo>{
         let deployInfo: DeployInfo = 
         {
             accounts: {
@@ -147,25 +147,28 @@ export class ContractHelper{
         await broadcast(controlDataTx, nodeUrl);
         await broadcast(rpdDataTx, nodeUrl);
 
-        const scriptNeutrinoContract = (<ICompilationResult>await compile(readFileSync(dirScriptsPath + "neutrino.ride",'utf8'))).result.base64 ;
-        const setScriptNeutrinoTx = setScript({ script: scriptNeutrinoContract, fee: 1000000, chainId: chainId }, deployInfo.accounts.neutrinoContract.phrase);
-        await broadcast(setScriptNeutrinoTx, nodeUrl);
+        let contracts = {
+            Neutrino: readFileSync(dirScriptsPath + "neutrino.ride",'utf8'),
+            Liquidation: readFileSync(dirScriptsPath + "liquidation.ride",'utf8'),
+            Auction: readFileSync(dirScriptsPath + "auction.ride",'utf8'),
+            Control: readFileSync(dirScriptsPath + "control.ride",'utf8'),
+            Rpd: readFileSync(dirScriptsPath + "rpd.ride",'utf8')
+        } 
+        if (removeMultisig) {
+            let keys = Object.keys(contracts)
+            for (let index in keys) {
+                let key = keys[index]
+                let startRmIndex = contracts[key].indexOf("@Verifier")
+                contracts[key] =  contracts[key].replace(contracts[key].substring(startRmIndex, contracts[key].length), "");
+            }
+        }
 
-        const scriptLiquidationContract =  (<ICompilationResult>await compile(readFileSync(dirScriptsPath + "liquidation.ride",'utf8'))).result.base64 ;
-        const setScriptLiquidationTx = setScript({ script: scriptLiquidationContract, fee: 1000000, chainId: chainId }, deployInfo.accounts.liquidationContract.phrase);    
-        await broadcast(setScriptLiquidationTx, nodeUrl);
+        await this.deployContract(contracts.Neutrino, nodeUrl, chainId, deployInfo.accounts.neutrinoContract.phrase)
+        await this.deployContract(contracts.Liquidation, nodeUrl, chainId, deployInfo.accounts.liquidationContract.phrase)
 
-        const scriptAuctionContract = (<ICompilationResult>await compile(readFileSync(dirScriptsPath + "auction.ride",'utf8'))).result.base64 ;
-        const setScriptAuctionTx = setScript({ script: scriptAuctionContract, fee: 1000000, chainId: chainId }, deployInfo.accounts.auctionContract.phrase);
-        await broadcast(setScriptAuctionTx, nodeUrl);
-        
-        const scriptControlContract =  (<ICompilationResult>await compile(readFileSync(dirScriptsPath + "control.ride",'utf8'))).result.base64;
-        const setScriptControlTx = setScript({ script: scriptControlContract, fee: 1000000, chainId: chainId }, deployInfo.accounts.controlContract.phrase);       
-        await broadcast(setScriptControlTx, nodeUrl);
-
-        const scriptRPDContract =  (<ICompilationResult>await compile(readFileSync(dirScriptsPath + "rpd.ride",'utf8'))).result.base64;
-        const setScriptRPDTx = setScript({ script: scriptRPDContract, fee: 1000000, chainId: chainId }, deployInfo.accounts.rpdContract.phrase);        
-        await broadcast(setScriptRPDTx, nodeUrl);
+        await this.deployContract(contracts.Auction, nodeUrl, chainId, deployInfo.accounts.auctionContract.phrase)
+        await this.deployContract(contracts.Control, nodeUrl, chainId, deployInfo.accounts.controlContract.phrase)
+        await this.deployContract(contracts.Rpd, nodeUrl, chainId, deployInfo.accounts.rpdContract.phrase)
 
 
         await waitForTx(issueTx.id, {apiBase: nodeUrl })
@@ -177,12 +180,14 @@ export class ContractHelper{
         await waitForTx(controlDataTx.id, {apiBase: nodeUrl });
         await waitForTx(rpdDataTx.id, {apiBase: nodeUrl });
 
-        await waitForTx(setScriptNeutrinoTx.id, {apiBase: nodeUrl })
-        await waitForTx(setScriptAuctionTx.id, {apiBase: nodeUrl })
-        await waitForTx(setScriptLiquidationTx.id, {apiBase: nodeUrl })
-        await waitForTx(setScriptControlTx.id, {apiBase: nodeUrl })
-        await waitForTx(setScriptRPDTx.id, {apiBase: nodeUrl })
-
         return deployInfo;
+    }
+    static async deployContract(file: string, nodeUrl: any, chainId: any, phrase: string) {
+        const contract =  await compile(file);
+        if ((<ICompilationError>contract).error != undefined)
+            console.log((<ICompilationError>contract).error)
+        const contractTx = setScript({ script: (<ICompilationResult>contract).result.base64, fee: 1000000, chainId: chainId }, phrase);    
+        await broadcast(contractTx, nodeUrl);
+        await waitForTx(contractTx.id, {apiBase: nodeUrl })
     }
 }
