@@ -7,7 +7,7 @@ import { OrderKeys } from "./contractKeys/OrderKeys";
 
 export class NeutrinoApi {
     static readonly WAVELET: number = (10 ** 8);
-    static readonly PAULI: number = 10**2;
+    static readonly PAULI: number = 10**6;
     neutrinoContractAddress: string;
     auctionContractAddress: string;
     controlContractAddress: string;
