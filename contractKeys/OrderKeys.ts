@@ -1,5 +1,6 @@
 export class OrderKeys{
-    static OrderbookKey = "orderbook"
+    static FirstOrderKey = "order_first"
+    static NextOrderKey = "order_next_"
     static OrderTotalKey = "order_total_"
     static OrderOwnerKey = "order_owner_"
     static OrderHeightKey = "order_height_"

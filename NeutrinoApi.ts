@@ -112,24 +112,26 @@ export class NeutrinoApi {
     }
     public async addBuyBondOrder(amount: number, price: number, seed: string): Promise<string> {
         price = Math.floor(price * 100);
-        console.log(price)
         const auctionData = await accountData(this.auctionContractAddress, this.nodeUrl);
-        let position = 0;
-        if(auctionData[OrderKeys.OrderbookKey] !== undefined) {
-            let orders = (<string>auctionData[OrderKeys.OrderbookKey].value).split("_").filter(x=>x != "");
-            position = orders.length;
-            for(let i = orders.length-1; i >= 0; i--) {
-                if(price > auctionData[OrderKeys.OrderPriceKey + orders[i]].value)
-                    position = i;
-                else   
+        
+        let firstOrder = auctionData[OrderKeys.FirstOrderKey]
+        let prevOrder = "";
+
+        if (firstOrder !== undefined && firstOrder.value != "") {
+            let nextOrder = <string>firstOrder.value;
+            
+            while(nextOrder !== undefined && nextOrder != "") {
+                if(price > <number>auctionData[OrderKeys.OrderPriceKey + nextOrder].value){
                     break;
+                }
+                prevOrder = nextOrder;
+                nextOrder = <string>auctionData[OrderKeys.NextOrderKey + prevOrder].value;
             }
         }
-    
         const tx = invokeScript({
             dApp: this.auctionContractAddress,
-            call: { function: "addBuyBondOrder", args: [{ type: "integer", value: price }, { type: "integer", value: position }] },
-            payment: [{ assetId: this.neutrinoAssetId, amount: amount }],
+            call: { function: "addBuyBondOrder", args: [{ type: "integer", value: price }, { type: "string", value: prevOrder }] },
+            payment: [{ assetId: null, amount: amount }],
             chainId: this.chainId
         }, seed);
 
